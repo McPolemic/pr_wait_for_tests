@@ -20,8 +20,6 @@ class LogWrapper
       total = status.statuses.count
 
       "Status is #{status.state}. #{in_progress}/#{total} succeeded..."
-    else
-      "Status is #{status.state}..."
     end
   end
 
@@ -87,11 +85,4 @@ until status.state == "success"
   status = client.status(pull_request)
 end
 
-`osascript -e 'display notification "PR #{number} tests have passed!" with title "Pull Request Watcher"'`
-puts "Status is successful. Open in browser? [y/n]"
-answer = STDIN.gets.chomp[0].downcase
-
-if answer == 'y'
-  `open "#{PR_URL}"`
-end
-
+logger.info "Build finish. Status: #{status.state}"
