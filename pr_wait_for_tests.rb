@@ -2,41 +2,16 @@
 require 'octokit'
 require 'logger'
 
-def usage_and_exit!
-  puts <<~EOF
-    Usage: $0 "https://github.com/my/project/123415"
-
-    Watches a PR and notifies once the tests have passed
-  EOF
-end
-
-def credential_helper(command, input)
-  IO.popen(["git", "credential", "fill"], "w+") do |io|
-    io.puts input
-    io.close_write
-    io.read
-  end
-end
-
-def get_credentials
-  github_credentials = credential_helper :fill, "protocol=https\nhost=github.com"
-  /username=(?<github_username>.+)/ =~ github_credentials
-  /password=(?<github_password>.+)/ =~ github_credentials
-  [github_username, github_password]
-end
-
-def repo(url)
-  /https:\/\/github.com\/(?<github_org>[^\/]+)\/(?<github_repo>[^\/]+)\/pull\/(?<github_number>[^\/]+)/ =~ url
-  repo = "#{github_org}/#{github_repo}"
-  [repo, github_number.to_i]
-end
-
-class Output
+class LogWrapper
   attr_reader :log
 
   def initialize
     @log = Logger.new(STDOUT)
     @log.formatter = ->(_, datetime, _, msg) { "#{datetime} #{msg}\n" }
+  end
+
+  def info(msg)
+    log.info(msg)
   end
 
   def log_for_status(status)
@@ -61,14 +36,11 @@ class Output
 end
 
 class GitHub
-  attr_reader :client
+  def pull_request_from_url(url)
+    /https:\/\/github.com\/(?<github_org>[^\/]+)\/(?<github_repo>[^\/]+)\/pull\/(?<github_number>[^\/]+)/ =~ url
+    repo = "#{github_org}/#{github_repo}"
 
-  def initialize(login:, password:)
-    @client = Octokit::Client.new(login: login, password: password)
-  end
-
-  def pull_request(repo_name, pr_number)
-    client.pull_request(repo_name, pr_number)
+    client.pull_request(repo, github_number.to_i)
   end
 
   def status(pull_request)
@@ -77,26 +49,41 @@ class GitHub
 
     client.status(repo_name, sha)
   end
+
+  def client
+    return @client if @client
+
+    github_credentials = `echo "protocol=https\nhost=github.com" | git credential fill`
+    /username=(?<login>.+)/ =~ github_credentials
+    /password=(?<password>.+)/ =~ github_credentials
+
+    @client = Octokit::Client.new(login: login, password: password)
+  end
 end
 
-usage_and_exit! unless ARGV.count == 1
-PR_URL = ARGV[0].inspect
+unless ARGV.count == 1
+  puts <<~EOF
+    Usage: $0 "https://github.com/my/project/123415"
 
-username, password = get_credentials
-client = GitHub.new(login: username, password: password)
-repo_name, number = repo(PR_URL)
-pull_request = client.pull_request(repo_name, number)
-output = Output.new
+    Watches a PR and notifies once the tests have passed
+  EOF
+  exit
+end
+PR_URL = ARGV.first
 
-output.log.info %(Watching "#{pull_request.title}" - #{PR_URL}...)
+logger = LogWrapper.new
+client = GitHub.new
+pull_request = client.pull_request_from_url(PR_URL)
 status = client.status(pull_request)
 
+logger.info %(Watching "#{pull_request.title}" - #{PR_URL}...)
+
 until status.state == "success"
-  output.log_debounced_status(status)
+  logger.log_debounced_status(status)
 
   sleep 10
 
-  pr_sha =  pull_request.head.sha
+  pull_request = client.pull_request_from_url(PR_URL)
   status = client.status(pull_request)
 end
 
