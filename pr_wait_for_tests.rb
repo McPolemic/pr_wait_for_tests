@@ -4,9 +4,9 @@ require 'logger'
 
 def usage_and_exit!
   puts <<~EOF
-    Usage: app.rb "https://github.com/my/draft/pr/123415"
+    Usage: $0 "https://github.com/my/project/123415"
 
-    Watches a Draft PR and sets it to ready once the tests pass
+    Watches a PR and notifies once the tests have passed
   EOF
 end
 
@@ -68,7 +68,7 @@ class GitHub
   end
 
   def pull_request(repo_name, pr_number)
-    client.pull_request(repo_name, pr_number, accept: 'application/vnd.github.shadow-cat-preview')
+    client.pull_request(repo_name, pr_number)
   end
 
   def status(pull_request)
@@ -88,11 +88,6 @@ repo_name, number = repo(PR_URL)
 pull_request = client.pull_request(repo_name, number)
 output = Output.new
 
-unless pull_request.draft?
-  output.log.error "Error: #{PR_URL} isn't a draft!"
-  exit
-end
-
 output.log.info %(Watching "#{pull_request.title}" - #{PR_URL}...)
 status = client.status(pull_request)
 
@@ -105,14 +100,11 @@ until status.state == "success"
   status = client.status(pull_request)
 end
 
-`osascript -e 'display notification "PR #{number} ready to publish" with title "Pull Request Watcher"'`
-puts "Status is successful. Ready to publish? [y/n]"
+`osascript -e 'display notification "PR #{number} tests have passed!" with title "Pull Request Watcher"'`
+puts "Status is successful. Open in browser? [y/n]"
 answer = STDIN.gets.chomp[0].downcase
 
 if answer == 'y'
-  # publish PR
-  puts "We should publish here"
-else
-  puts "Exiting without publishing..."
+  `open "#{PR_URL}"`
 end
 
