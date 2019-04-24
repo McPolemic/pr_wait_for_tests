@@ -14,7 +14,7 @@ class LogWrapper
     log.info(msg)
   end
 
-  def log_for_status(status)
+  def log_for_overall_status(status)
     if status.state == "pending"
       in_progress = status.statuses.select{|status| status.state == "success"}.count
       total = status.statuses.count
@@ -24,7 +24,7 @@ class LogWrapper
   end
 
   def log_debounced_status(status)
-    log_line = log_for_status(status)
+    log_line = log_for_overall_status(status)
 
     if log_line != @last_log_line
       log.info(log_line)
@@ -59,6 +59,17 @@ class GitHub
   end
 end
 
+def log_build_statuses(statuses)
+  statuses.each do |status|
+    case status.state
+    when "success"
+      puts "#{status.state} - #{status.description}"
+    else
+      puts "#{status.state} - #{status.description} - #{status.target_url}"
+    end
+  end
+end
+
 unless ARGV.count == 1
   puts <<~EOF
     Usage: #{$0} "https://github.com/my/project/123415"
@@ -76,7 +87,7 @@ status = client.status(pull_request)
 
 logger.info %(Watching "#{pull_request.title}" - #{PR_URL}...)
 
-until status.state == "success"
+while status.state == "pending"
   logger.log_debounced_status(status)
 
   sleep 10
@@ -86,3 +97,4 @@ until status.state == "success"
 end
 
 logger.info "Build finish. Status: #{status.state}"
+log_build_statuses(status.statuses)
