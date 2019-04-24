@@ -2,6 +2,8 @@
 require 'octokit'
 require 'logger'
 
+ARBITRARY_GITHUB_API_SLEEP_TIMER = 10
+
 class LogWrapper
   attr_reader :log
 
@@ -90,7 +92,7 @@ logger.info %(Watching "#{pull_request.title}" - #{PR_URL}...)
 while status.state == "pending"
   logger.log_debounced_status(status)
 
-  sleep 10
+  sleep ARBITRARY_GITHUB_API_SLEEP_TIMER
 
   pull_request = client.pull_request_from_url(PR_URL)
   status = client.status(pull_request)
