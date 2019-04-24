@@ -61,7 +61,7 @@ end
 
 unless ARGV.count == 1
   puts <<~EOF
-    Usage: $0 "https://github.com/my/project/123415"
+    Usage: #{$0} "https://github.com/my/project/123415"
 
     Watches a PR and notifies once the tests have passed
   EOF
